@@ -1,0 +1,43 @@
+#! /bin/sh
+#
+### BEGIN INIT INFO
+# Required-Start:    apache2
+# Required-Stop:     apache2
+# Provides:          roadrunner
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 6
+# Short-Description: coreBOS RoadRunner web service
+# Description:       coreBOS RoadRunner web service
+### END INIT INFO
+set -e
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+NAME="roadrunner"
+DESC="coreBOS RoadRunner web service"
+SCRIPTNAME="/etc/init.d/$NAME"
+WorkingDirectory="/var/www/html"
+cd $WorkingDirectory
+
+case "$1" in
+start)
+	./rr serve &
+	;;
+reset)
+	./rr http:reset
+	;;
+restart)
+	./rr stop
+	./rr serve &
+	;;
+status)
+	./rr http:workers
+	;;
+stop)
+	./rr stop
+	;;
+*)
+	echo "Usage: $SCRIPTNAME {start|stop|status|restart|reset}" >&2
+	exit 3
+	;;
+esac
