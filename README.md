@@ -31,6 +31,23 @@ In the `docker` directory you can find a docker file to create a coreBOS docker 
 - copy a dump of your production database into the schema directory with the same name you have set in $COREBOS_DATABASE, the start script will look for a database with the name $COREBOS_DATABASE, if it is not found and a dump file names `schema/$COREBOS_DATABASE.sql` exists the database will be created and the dump loaded
 - the cron system, roadrunner and apache will be started
 
+## Login System Synchronization
+
+Bundled with the Road Runner web service you will find also a new API endpoint named `loginSession`. Although not exclusively related to Road Runner as it could be used also with Apache, Nginx, or others with some tweaks in the session management, it permits us to distribute the login session identifier to other coreBOS installs. The use case is where we have a very large load of users accessing coreBOS web services and we want to distribute the workload among various coreBOS installs. All the installs must share the same code base and users. We can use any load balancer or routing system to distribute the calls to the different workers but the problem that appears is when a `login` is done in one of the systems, a session identifier is created and assigned for subsequent calls to send that session identifier and have access. In the case of various distributed coreBOS installs, the other installs do not recognize the session identifier. The loginSession endpoint will permit us to automatically send the assigned sessionid to the other systems so the balancer can send the request to any of the workers and get the expected result.
+
+For this to work securely you must define the site URL of each synchronized coreBOS and set a shared private key for each one. The synchronization extension will detect a login on one of the systems and use the private key to authenticate against the other systems and establish the session identifier in each one. The logout action will also be distributed among the synchronized coreBOS installs.
+
+coreBOS has a configuration section in Integrations where you can establish the synchronized URLs
+
+**loginSession** accepts 4 parameters:
+
+- username: user name to login with
+- loggedinat: site URL of the originating system, this URL must be configured in the destination coreBOS
+- hashaccess: the sha512 hash of the token and the shared private key
+- sessionid: the session identifier to establish
+
+Copy the two files into place and apply all in coreBOS updater
+
 ## Notes
 
 - Road Runner uses a different session and authentication management system than coreBOS does which makes the operation `extendsession` meaningless: `extendsession` is not supported with Road Runner
