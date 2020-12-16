@@ -85,6 +85,13 @@ function writeOutput($operationManager, $data) {
 $adminid = Users::getActiveAdminId();
 while ($req = $psr7->acceptRequest()) {
 	try {
+
+		global $current_user,$adb,$app_strings;
+		$cb_db = PearDatabase::getInstance();
+		if (empty($cb_db) || $cb_db->database->_connectionID->errno > 0) {
+			$adb->connect();
+		}
+		
 		$resp = new \Zend\Diactoros\Response();
 		$_GET = is_null($req->getQueryParams()) ? array() : $req->getQueryParams();
 		$_POST = is_null($req->getParsedBody()) ? array() : $req->getParsedBody();
