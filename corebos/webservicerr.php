@@ -15,11 +15,17 @@
  *  Module       : coreBOS RoadRunner Webservice
  *************************************************************************************************/
 ini_set('display_errors', 'stderr');
+use Spiral\RoadRunner;
+use Nyholm\Psr7;
+use Spiral\Goridge;
+
 include 'vendor/autoload.php';
 include 'webserviceload.php';
 
-$relay = new Spiral\Goridge\StreamRelay(STDIN, STDOUT);
-$psr7 = new Spiral\RoadRunner\PSR7Client(new Spiral\RoadRunner\Worker($relay));
+$worker = RoadRunner\Worker::create();
+$psr7 = new Psr7\Factory\Psr17Factory();
+$worker = new RoadRunner\Http\PSR7Worker($worker, $psr7, $psr7, $psr7);
+$metrics = new RoadRunner\Metrics\Metrics(Goridge\RPC\RPC::create(RoadRunner\Environment::fromGlobals()->getRPCAddress()));
 
 /** Workaround to enable capaturing relation query */
 global $GetRelatedList_ReturnOnlyQuery;
@@ -83,7 +89,7 @@ function writeOutput($operationManager, $data) {
 }
 
 $adminid = Users::getActiveAdminId();
-while ($req = $psr7->acceptRequest()) {
+while ($req = $worker->waitRequest()) {
 	try {
 
 		global $current_user,$adb,$app_strings;
@@ -92,20 +98,21 @@ while ($req = $psr7->acceptRequest()) {
 			$adb->connect();
 		}
 		
-		$resp = new \Zend\Diactoros\Response();
+		$resp = new Laminas\Diactoros\Response();
 		$_GET = is_null($req->getQueryParams()) ? array() : $req->getQueryParams();
 		$_POST = is_null($req->getParsedBody()) ? array() : $req->getParsedBody();
 		$_REQUEST = array_merge($_GET, $_POST);
 		if (empty($_REQUEST)) {
 			$operationManager = new OperationManager($adb, 'getchallenge', 'json', null);
 			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$UNKNOWNOPERATION, 'Unknown operation requested'));
-			$psr7->respond($resp);
+			$worker->respond($resp);
 			continue;
 		}
 		$_SERVER = $req->getServerParams();
 		if (!GlobalVariable::getVariable('Webservice_Enabled', 1, 'Users', $adminid) || coreBOS_Settings::getSetting('cbSMActive', 0)) {
 			$resp->getBody()->write('Webservice - Service is not active');
-			$psr7->respond($resp);
+			$metrics->add('app_metric_counter', 1);
+			$worker->respond($resp);
 			continue;
 		}
 
@@ -127,7 +134,8 @@ while ($req = $psr7->acceptRequest()) {
 				$resp->withAddedHeader('Access-Control-Allow-Headers', $_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']);
 			}
 			if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-				$psr7->respond($resp);
+				$metrics->add('app_metric_counter', 1);
+				$worker->respond($resp);
 				continue;
 			}
 		}
@@ -151,13 +159,14 @@ while ($req = $psr7->acceptRequest()) {
 		} catch (WebServiceException $e) {
 			$operationManager = new OperationManager($adb, 'getchallenge', 'json', null);
 			writeErrorOutput($operationManager, $e);
-			$psr7->respond($resp);
+			$worker->respond($resp);
 			continue;
 		}
 		if (strcasecmp($operation, 'extendsession')===0) {
 			$operationManager = new OperationManager($adb, 'getchallenge', 'json', null);
 			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$OPERATIONNOTSUPPORTED, 'extendsession operation not supported'));
-			$psr7->respond($resp);
+			$metrics->add('app_metric_counter', 1);
+			$worker->respond($resp);
 			continue;
 		}
 		// Empty cache
@@ -199,7 +208,8 @@ while ($req = $psr7->acceptRequest()) {
 				} else {
 					writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$AUTHREQUIRED, 'Authentication required'));
 				}
-				$psr7->respond($resp);
+				$metrics->add('app_metric_counter', 1);
+				$worker->respond($resp);
 				continue;
 			}
 
@@ -222,7 +232,8 @@ while ($req = $psr7->acceptRequest()) {
 			}
 			if (empty($current_user) && !$operationManager->isPreLoginOperation()) {
 				writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$INVALIDUSER, 'Invalid user'));
-				$psr7->respond($resp);
+				$metrics->add('app_metric_counter', 1);
+				$worker->respond($resp);
 				continue;
 			}
 
@@ -254,8 +265,9 @@ while ($req = $psr7->acceptRequest()) {
 		}
 		//$resp->getBody()->write(json_encode(vtws_describe($_REQUEST['mod'], $current_user)));
 		//$resp->getBody()->write(print_r($req->getQueryParams(), true));
-		$psr7->respond($resp);
+		$metrics->add('app_metric_counter', 1);
+		$worker->respond($resp);
 	} catch (\Throwable $e) {
-		$psr7->getWorker()->error((string)$e);
+		$worker->getWorker()->error((string)$e);
 	}
 }
