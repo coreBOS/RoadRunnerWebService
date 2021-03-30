@@ -9,7 +9,7 @@ This project permits us to run a highly performant and stable coreBOS web servic
   - include/Webservices/SessionManagerDB.php
   - webserviceload.php
   - webservicerr.php
-- composer require spiral/roadrunner
+- composer require spiral/roadrunner spiral/goridge spiral/roadrunner-metrics  nyholm/psr7 laminas/laminas-diactoros
 - ./vendor/bin/rr get
 - commit changes if you need to
 - ./rr serve
