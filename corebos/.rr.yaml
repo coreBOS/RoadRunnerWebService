@@ -1,3 +1,14 @@
+rpc:
+  listen: tcp://127.0.0.1:6001
+server:
+  command: "php webservicerr.php"
 http:
-  address:         0.0.0.0:8081
-  workers.command: "php webservicerr.php"
+  address: 0.0.0.0:8081
+status:
+  address: 0.0.0.0:2114
+metrics:
+  address: 0.0.0.0:2112
+  collect:
+    app_metric_counter:
+      type: counter
+      help: "Application counter."
