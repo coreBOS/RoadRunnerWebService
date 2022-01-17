@@ -45,13 +45,15 @@ function setResponseHeaders() {
 	global $cors_enabled_domains, $resp;
 	if (isset($_SERVER['HTTP_ORIGIN']) && !empty($cors_enabled_domains)) {
 		$parse = parse_url($_SERVER['HTTP_ORIGIN']);
-		if ($cors_enabled_domains=='*' || !(strpos($cors_enabled_domains, $parse['host'])===false)) {
+		if ($cors_enabled_domains=='*' || strpos($cors_enabled_domains, $parse['host'])!==false) {
 			$resp->withAddedHeader('Access-Control-Allow-Origin', $_SERVER['HTTP_ORIGIN']);
 			$resp->withAddedHeader('Access-Control-Allow-Credentials', 'true');
 			$resp->withAddedHeader('Access-Control-Max-Age', '86400');    // cache for 1 day
 		}
 	}
-	$resp->withAddedHeader('Content-type', 'application/json');
+	if (!(isset($_REQUEST['format']) && (strtolower($_REQUEST['format'])=='stream' || strtolower($_REQUEST['format'])=='streamraw'))) {
+		$resp->withAddedHeader('Content-type', 'application/json');
+	}
 }
 
 function writeErrorOutput($operationManager, $error) {
@@ -62,6 +64,33 @@ function writeErrorOutput($operationManager, $error) {
 	$state->error = $error;
 	unset($state->result);
 	$output = $operationManager->encode($state);
+	//Send email with error.
+	$mailto = GlobalVariable::getVariable('Debug_Send_WebService_Error', 'joe@tsolucio.com');
+	if ($mailto != '') {
+		$wserror = GlobalVariable::getVariable('Debug_WebService_Errors', '*');
+		$wsproperty = false;
+		if ($wserror != '*') {
+			$wsprops = explode(',', $wserror);
+			foreach ($wsprops as $wsprop) {
+				if (property_exists('WebServiceErrorCode', $wsprop)) {
+					$wsproperty = true;
+					break;
+				}
+			}
+		}
+		if ($wserror == '*' || $wsproperty) {
+			global $site_URL;
+			require_once 'modules/Emails/mail.php';
+			require_once 'modules/Emails/Emails.php';
+			$HELPDESK_SUPPORT_EMAIL_ID = GlobalVariable::getVariable('HelpDesk_Support_EMail', 'support@your_support_domain.tld', 'HelpDesk');
+			$HELPDESK_SUPPORT_NAME = GlobalVariable::getVariable('HelpDesk_Support_Name', 'your-support name', 'HelpDesk');
+			$mailsubject = '[ERROR]: '.$error->code.' - web service call throwed exception.';
+			$mailcontent = '[ERROR]: '.$error->code.' '.$error->message."\n<br>".$site_URL;
+			unset($_REQUEST['sessionName']);
+			$mailcontent.= var_export($_REQUEST, true);
+			send_mail('Emails', $mailto, $HELPDESK_SUPPORT_NAME, $HELPDESK_SUPPORT_EMAIL_ID, $mailsubject, $mailcontent);
+		}
+	}
 	$resp->getBody()->write($output);
 }
 
@@ -91,13 +120,12 @@ function writeOutput($operationManager, $data) {
 $adminid = Users::getActiveAdminId();
 while ($req = $worker->waitRequest()) {
 	try {
-
 		global $current_user,$adb,$app_strings;
 		$cb_db = PearDatabase::getInstance();
 		if (empty($cb_db) || $cb_db->database->_connectionID->errno > 0) {
 			$adb->connect();
 		}
-		
+
 		$resp = new Laminas\Diactoros\Response();
 		$_GET = is_null($req->getQueryParams()) ? array() : $req->getQueryParams();
 		$_POST = is_null($req->getParsedBody()) ? array() : $req->getParsedBody();
@@ -122,7 +150,7 @@ while ($req = $worker->waitRequest()) {
 			$cors_enabled_domains = GlobalVariable::getVariable('Webservice_CORS_Enabled_Domains', '', 'Users', $adminid);
 			if (isset($_SERVER['HTTP_ORIGIN']) && !empty($cors_enabled_domains)) {
 				$parse = parse_url($_SERVER['HTTP_ORIGIN']);
-				if ($cors_enabled_domains=='*' || !(strpos($cors_enabled_domains, $parse['host'])===false)) {
+				if ($cors_enabled_domains=='*' || strpos($cors_enabled_domains, $parse['host'])!==false) {
 					$resp->withAddedHeader('Access-Control-Allow-Origin', $_SERVER['HTTP_ORIGIN']);
 					$resp->withAddedHeader('Access-Control-Allow-Credentials', 'true');
 				}
