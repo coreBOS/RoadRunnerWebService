@@ -41,7 +41,7 @@ function getRequestParamsArrayForOperation($operation) {
 	return $operationInput[$operation];
 }
 
-function setResponseHeaders() {
+function setResponseHeadersRR() {
 	global $cors_enabled_domains, $resp;
 	if (isset($_SERVER['HTTP_ORIGIN']) && !empty($cors_enabled_domains)) {
 		$parse = parse_url($_SERVER['HTTP_ORIGIN']);
@@ -54,67 +54,6 @@ function setResponseHeaders() {
 	if (!(isset($_REQUEST['format']) && (strtolower($_REQUEST['format'])=='stream' || strtolower($_REQUEST['format'])=='streamraw'))) {
 		$resp->withAddedHeader('Content-type', 'application/json');
 	}
-}
-
-function writeErrorOutput($operationManager, $error) {
-	global $resp;
-	setResponseHeaders();
-	$state = new State();
-	$state->success = false;
-	$state->error = $error;
-	unset($state->result);
-	$output = $operationManager->encode($state);
-	//Send email with error.
-	$mailto = GlobalVariable::getVariable('Debug_Send_WebService_Error', 'joe@tsolucio.com');
-	if ($mailto != '') {
-		$wserror = GlobalVariable::getVariable('Debug_WebService_Errors', '*');
-		$wsproperty = false;
-		if ($wserror != '*') {
-			$wsprops = explode(',', $wserror);
-			foreach ($wsprops as $wsprop) {
-				if (property_exists('WebServiceErrorCode', $wsprop)) {
-					$wsproperty = true;
-					break;
-				}
-			}
-		}
-		if ($wserror == '*' || $wsproperty) {
-			global $site_URL;
-			require_once 'modules/Emails/mail.php';
-			require_once 'modules/Emails/Emails.php';
-			$HELPDESK_SUPPORT_EMAIL_ID = GlobalVariable::getVariable('HelpDesk_Support_EMail', 'support@your_support_domain.tld', 'HelpDesk');
-			$HELPDESK_SUPPORT_NAME = GlobalVariable::getVariable('HelpDesk_Support_Name', 'your-support name', 'HelpDesk');
-			$mailsubject = '[ERROR]: '.$error->code.' - web service call throwed exception.';
-			$mailcontent = '[ERROR]: '.$error->code.' '.$error->message."\n<br>".$site_URL;
-			unset($_REQUEST['sessionName']);
-			$mailcontent.= var_export($_REQUEST, true);
-			send_mail('Emails', $mailto, $HELPDESK_SUPPORT_NAME, $HELPDESK_SUPPORT_EMAIL_ID, $mailsubject, $mailcontent);
-		}
-	}
-	$resp->getBody()->write($output);
-}
-
-function writeOutput($operationManager, $data) {
-	global $resp;
-	setResponseHeaders();
-	$state = new State();
-	if (isset($data['wsmoreinfo'])) {
-		$state->moreinfo = $data['wsmoreinfo'];
-		unset($data['wsmoreinfo']);
-		if (!isset($data['wssuccess'])) {
-			$data = $data['wsresult'];
-		}
-	}
-	if (isset($data['wsresult']) && isset($data['wssuccess'])) {
-		$state->success = $data['wssuccess'];
-		$state->result = $data['wsresult'];
-	} else {
-		$state->success = true;
-		$state->result = $data;
-	}
-	unset($state->error);
-	$output = $operationManager->encode($state);
-	$resp->getBody()->write($output);
 }
 
 $adminid = Users::getActiveAdminId();
@@ -132,7 +71,7 @@ while ($req = $worker->waitRequest()) {
 		$_REQUEST = array_merge($_GET, $_POST);
 		if (empty($_REQUEST)) {
 			$operationManager = new OperationManager($adb, 'getchallenge', 'json', null);
-			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$UNKNOWNOPERATION, 'Unknown operation requested'));
+			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$UNKNOWNOPERATION, 'Unknown operation requested'), 'roadrunner', 'setResponseHeadersRR');
 			$worker->respond($resp);
 			continue;
 		}
@@ -186,13 +125,13 @@ while ($req = $worker->waitRequest()) {
 			$operationManager = new OperationManager($adb, $operation, $format, $sessionManager);
 		} catch (WebServiceException $e) {
 			$operationManager = new OperationManager($adb, 'getchallenge', 'json', null);
-			writeErrorOutput($operationManager, $e);
+			writeErrorOutput($operationManager, $e, 'roadrunner', 'setResponseHeadersRR');
 			$worker->respond($resp);
 			continue;
 		}
 		if (strcasecmp($operation, 'extendsession')===0) {
 			$operationManager = new OperationManager($adb, 'getchallenge', 'json', null);
-			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$OPERATIONNOTSUPPORTED, 'extendsession operation not supported'));
+			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$OPERATIONNOTSUPPORTED, 'extendsession operation not supported'), 'roadrunner', 'setResponseHeadersRR');
 			$metrics->add('app_metric_counter', 1);
 			$worker->respond($resp);
 			continue;
@@ -232,9 +171,9 @@ while ($req = $worker->waitRequest()) {
 
 			if (!$sid && !$operationManager->isPreLoginOperation()) {
 				if (!empty($sessionId) && strcasecmp($operation, 'logout')===0) {
-					writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$SESSIONIDINVALID, 'Session Identifier provided is invalid'));
+					writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$SESSIONIDINVALID, 'Session Identifier provided is invalid'), 'roadrunner', 'setResponseHeadersRR');
 				} else {
-					writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$AUTHREQUIRED, 'Authentication required'));
+					writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$AUTHREQUIRED, 'Authentication required'), 'roadrunner', 'setResponseHeadersRR');
 				}
 				$metrics->add('app_metric_counter', 1);
 				$worker->respond($resp);
@@ -259,7 +198,7 @@ while ($req = $worker->waitRequest()) {
 				$current_user = null;
 			}
 			if (empty($current_user) && !$operationManager->isPreLoginOperation()) {
-				writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$INVALIDUSER, 'Invalid user'));
+				writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$INVALIDUSER, 'Invalid user'), 'roadrunner', 'setResponseHeadersRR');
 				$metrics->add('app_metric_counter', 1);
 				$worker->respond($resp);
 				continue;
@@ -276,20 +215,20 @@ while ($req = $worker->waitRequest()) {
 			if (strcasecmp($operation, 'logout')===0) {
 				if ($sessionManager->isValid()) {
 					$sessionManager->destroy();
-					writeOutput($operationManager, array('message' => 'successfull'));
+					writeOutput($operationManager, array('message' => 'successfull'), 'roadrunner', 'setResponseHeadersRR');
 				} else {
-					writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$SESSIONIDINVALID, 'Session Identifier provided is invalid'));
+					writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$SESSIONIDINVALID, 'Session Identifier provided is invalid'), 'roadrunner', 'setResponseHeadersRR');
 				}
 			} elseif (strcasecmp($operation, 'login')===0) {
 				$sessionManager->startSession($sid);
-				writeOutput($operationManager, $operationManager->runOperation($operationInput, $current_user));
+				writeOutput($operationManager, $operationManager->runOperation($operationInput, $current_user), 'roadrunner', 'setResponseHeadersRR');
 			} else {
-				writeOutput($operationManager, $operationManager->runOperation($operationInput, $current_user));
+				writeOutput($operationManager, $operationManager->runOperation($operationInput, $current_user), 'roadrunner', 'setResponseHeadersRR');
 			}
 		} catch (WebServiceException $e) {
-			writeErrorOutput($operationManager, $e);
+			writeErrorOutput($operationManager, $e, 'roadrunner', 'setResponseHeadersRR');
 		} catch (Exception $e) {
-			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$INTERNALERROR, 'Unknown Error while processing request'));
+			writeErrorOutput($operationManager, new WebServiceException(WebServiceErrorCode::$INTERNALERROR, 'Unknown Error while processing request'), 'roadrunner', 'setResponseHeadersRR');
 		}
 		//$resp->getBody()->write(json_encode(vtws_describe($_REQUEST['mod'], $current_user)));
 		//$resp->getBody()->write(print_r($req->getQueryParams(), true));
