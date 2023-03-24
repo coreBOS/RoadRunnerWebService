@@ -1,3 +1,12 @@
+# Project Archived
+
+We created this project in 2020 for a high demand coreBOS install. Turned out that they really didn't need that much and we ended up not using this project. At the start of 2023 another project with this demand appears and I try to recover it to find that everything has changed. RoadRunner no longer supports this code and coreBOS has also changed so much that it makes no sense to continue the approach that is here. A strange sector software developement, **two years go by and none of the code you made is worth a shit.**
+
+I'm archiving the project and making the new version closed. Reach out to me if you need it.
+
+-----------------------------
+-----------------------------
+
 # coreBOS-RoadRunner Production Web Service
 
 This project permits us to run a highly performant and stable coreBOS web service. The main goal is to have this running in a docker container accessing your customized coreBOS while your frontend code makes calls to the service, but it can also run alongside your normal access to the coreBOS application.
